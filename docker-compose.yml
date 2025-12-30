@@ -1,0 +1,222 @@
+version: '3.8'
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: videoai
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
+      POSTGRES_DB: video_ai_production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U videoai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Redis for caching and Celery
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Flask Application
+  web:
+    build: .
+    image: video-ai-saas:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: postgresql://videoai:${DB_PASSWORD:-secure_password}@postgres:5432/video_ai_production
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      STABILITY_API_KEY: ${STABILITY_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+    volumes:
+      - uploads_volume:/var/uploads
+      - temp_volume:/var/temp
+      - logs_volume:/var/logs
+      - processing_volume:/var/processing
+      - outputs_volume:/var/outputs
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Celery Worker
+  celery:
+    build: .
+    image: video-ai-saas:latest
+    command: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: postgresql://videoai:${DB_PASSWORD:-secure_password}@postgres:5432/video_ai_production
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      STABILITY_API_KEY: ${STABILITY_API_KEY}
+    volumes:
+      - uploads_volume:/var/uploads
+      - temp_volume:/var/temp
+      - processing_volume:/var/processing
+      - outputs_volume:/var/outputs
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Celery Beat (Scheduled Tasks)
+  celery-beat:
+    build: .
+    image: video-ai-saas:latest
+    command: celery -A src.tasks.celery_app beat --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: postgresql://videoai:${DB_PASSWORD:-secure_password}@postgres:5432/video_ai_production
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Flower (Celery Monitoring)
+  flower:
+    build: .
+    image: video-ai-saas:latest
+    command: celery -A src.tasks.celery_app flower --port=5555
+    depends_on:
+      celery:
+        condition: service_started
+    environment:
+      FLASK_ENV: production
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+    ports:
+      - "5555:5555"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    depends_on:
+      web:
+        condition: service_healthy
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - uploads_volume:/var/uploads:ro
+      - static_volume:/app/static:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Traefik Load Balancer (Alternative to Nginx)
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=admin@yourdomain.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_volume:
+  temp_volume:
+  logs_volume:
+  processing_volume:
+  outputs_volume:
+  static_volume:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: video-ai-network

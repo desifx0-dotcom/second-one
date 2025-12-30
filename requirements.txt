@@ -1,0 +1,115 @@
+# ============================================
+# Video AI SaaS Platform - Production Dependencies
+# ============================================
+
+# === CORE ===
+Flask==3.0.0
+python-dotenv==1.0.0
+Werkzeug==3.0.1
+
+# === DATABASE ===
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+SQLAlchemy==2.0.25
+psycopg2-binary==2.9.9  # PostgreSQL for production
+alembic==1.13.1
+
+# === AUTHENTICATION & SECURITY ===
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+WTForms==3.1.2
+Flask-CORS==4.0.0
+Flask-Limiter==3.5.1
+bcrypt==4.1.2
+PyJWT==2.8.0
+cryptography==42.0.5
+blinker==1.9.0
+
+# === AI SERVICES ===
+openai==1.12.0
+google-generativeai==0.3.2
+stability-sdk==0.8.0
+anthropic==0.25.4  # Optional: Claude AI
+cohere==5.2.3  # Optional: Cohere AI
+
+# === VIDEO/AUDIO PROCESSING ===
+ffmpeg-python==0.2.0
+moviepy==1.0.3
+opencv-python==4.9.0.80
+Pillow==10.2.0
+imageio==2.34.0
+python-magic==0.4.27
+pydub==0.25.1
+SpeechRecognition==3.10.0
+
+# === REAL-TIME & ASYNC ===
+Flask-SocketIO==5.3.6
+python-socketio==5.11.1
+eventlet==0.35.1
+celery==5.3.6
+redis==5.0.1
+flower==2.0.1  # Celery monitoring
+
+# === CLOUD STORAGE ===
+boto3==1.34.0
+google-cloud-storage==2.14.0
+azure-storage-blob==12.23.0
+
+# === PAYMENT PROCESSING ===
+stripe==7.7.0
+paypalrestsdk==1.13.1  # Alternative payment
+
+# === EMAIL & NOTIFICATIONS ===
+Flask-Mail==0.9.1
+sendgrid==6.11.0  # Optional: SendGrid
+twilio==8.13.0  # Optional: SMS notifications
+
+# === CACHING ===
+Flask-Caching==2.1.0
+redis==5.0.1
+
+# === MONITORING & LOGGING ===
+prometheus-client==0.20.0
+sentry-sdk[flask]==1.45.0
+structlog==24.2.0
+loguru==0.7.2
+
+# === UTILITIES ===
+requests==2.31.0
+httpx==0.25.2
+pytz==2024.1
+python-dateutil==2.9.0.post0
+pandas==2.2.0
+numpy==1.26.4
+scikit-learn==1.4.2  # For ML features
+nltk==3.8.1  # NLP utilities
+
+# === TRANSLATION ===
+googletrans==4.0.0rc1
+translate==3.6.1
+langdetect==1.0.9
+
+# === FORM HANDLING ===
+Flask-WTF==1.2.1
+WTForms==3.1.2
+
+# === PRODUCTION SERVER ===
+gunicorn==21.2.0
+eventlet==0.35.1
+gevent==23.9.1
+
+# === DEVELOPMENT (optional) ===
+black==24.1.1
+flake8==7.0.0
+pytest==8.0.0
+pytest-cov==4.1.0
+pytest-flask==1.2.0
+ipython==8.23.0
+python-dotenv==1.0.0
+
+# === DEPENDENCY MANAGEMENT ===
+pip-tools==7.4.1
+
+# === SECURITY UPDATES ===
+urllib3==2.2.1
+certifi==2024.2.2
