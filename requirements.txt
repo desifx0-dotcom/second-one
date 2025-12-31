@@ -119,3 +119,10 @@ pip-tools==7.4.1
 # === SECURITY UPDATES ===
 urllib3==2.2.1
 certifi==2024.2.2
+
+
+
+
+
+
+pydantic==2.5.2

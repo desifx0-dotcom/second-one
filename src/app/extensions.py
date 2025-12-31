@@ -10,6 +10,7 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from flask_jwt_extended import JWTManager
 
 # Database
 db = SQLAlchemy()
@@ -37,12 +38,16 @@ login_manager.session_protection = 'strong'
 
 # CSRF protection
 csrf = CSRFProtect()
-
+jwt = JWTManager()
 # CORS
 cors = CORS()
 
 # SocketIO
-socketio = SocketIO(cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(
+    cors_allowed_origins="*",
+    async_mode='eventlet',
+    logger=True,
+    engineio_logger=True)
 
 # Export all extensions
 __all__ = [
